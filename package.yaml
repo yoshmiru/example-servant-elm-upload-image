@@ -1,4 +1,4 @@
-name: example-servant-elm
+name: example-servant-elm-upload-image
 
 dependencies:
   - base
@@ -7,7 +7,6 @@ dependencies:
   - wai-make-assets
   - servant
   - servant-elm >= 0.6.0.2
-  - servant-multipart
   - elm-bridge >= 0.5.2
   - wai
   - servant-server
