@@ -16,7 +16,9 @@ type Api =
     ("item" :> Get '[JSON] [ItemId] :<|>
      "item" :> Capture "itemId" ItemId :> Get '[JSON] Item :<|>
      "item" :> ReqBody '[JSON] String :> Post '[JSON] ItemId :<|>
-     "item" :> Capture "itemId" ItemId :> Delete '[JSON] ())
+     "item" :> Capture "itemId" ItemId :> Delete '[JSON] () :<|>
+     "itemImage" :> Capture "itemId" ItemId :> ReqBody '[JSON] String :> Put '[JSON] ()
+     )
 
 api :: Proxy Api
 api = Proxy
@@ -29,7 +31,8 @@ newtype ItemId = ItemId Int
 data Item
   = Item {
     id :: ItemId,
-    text :: String
+    text :: String,
+    pic :: String
   }
   deriving (Show, Eq)
 

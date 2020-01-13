@@ -2,11 +2,16 @@ module Main exposing (FromServer(..), FromUi(..), Model, Msg(..), fromServer, in
 
 import Api exposing (..)
 import Browser
+import Debug exposing (log)
 import Dict exposing (Dict)
+import File exposing (File)
+import File.Select as Select
 import Html exposing (Html, button, div, input, li, text, ul)
-import Html.Attributes exposing (value)
-import Html.Events exposing (onClick, onInput)
+import Html.Attributes exposing (style, type_, value)
+import Html.Events exposing (on, onClick, onInput)
 import Http
+import Json.Decode as D
+import Task
 
 
 main : Program () Model Msg
@@ -26,13 +31,16 @@ main =
 type alias Model =
     { items : Dict Int Item
     , addItemInput : String
+    , pic : String
+    , files : List File
+    , previews : List String
     , error : Maybe String
     }
 
 
 init : ( Model, Cmd Msg )
 init =
-    ( Model Dict.empty "" Nothing
+    ( Model Dict.empty "" "" [] [] Nothing
     , Api.getApiItem (fromServer Initial)
     )
 
@@ -56,6 +64,9 @@ type FromServer
 type FromUi
     = AddItemInputChange String
     | AddItemButton
+    | GotImages ItemId (List File)
+    | PutImages ItemId (List String)
+    | GotPreviews (List String)
     | Done ItemId
 
 
@@ -93,13 +104,29 @@ update msg model =
 
                     else
                         ( { model | addItemInput = "" }
-                        , postApiItem itemName (fromServer (\id -> NewItem (Item id itemName)))
+                        , postApiItem itemName (fromServer (\id -> NewItem (Item id itemName "")))
                         )
 
                 AddItemInputChange t ->
                     ( { model | addItemInput = t, error = Nothing }
                     , Cmd.none
                     )
+
+                GotImages itemId files ->
+                     (model,
+                     Task.perform (FromUi << (PutImages itemId))
+                         <| Task.sequence
+                         <| List.map File.toUrl (files))
+
+                PutImages itemId urls ->
+                    let api url = Api.putApiItemImageByItemId
+                            (log "itemId" itemId)
+                            (log "url" url)
+                            (fromServer (\() -> Initial itemIds))
+                        itemIds = Dict.keys model.items
+                    in (model, List.map api urls |> Cmd.batch)
+
+                GotPreviews urls -> ({model | previews = urls ++ model.previews}, Cmd.none)
 
                 Done id ->
                     ( model
@@ -153,19 +180,42 @@ view model =
             model.error
                 |> Maybe.map viewError
                 |> Maybe.withDefault (Html.text "")
+
+        previews = List.map viewPreview model.previews
+
     in
     div []
         [ ul [] items
         , input [ onInput (FromUi << AddItemInputChange), value model.addItemInput ] []
         , button [ onClick (FromUi AddItemButton) ] [ text "add item" ]
+        , div [] previews
         , error
         ]
 
+filesDecoder : D.Decoder (List File)
+filesDecoder =
+  D.at ["target","files"] (D.list File.decoder)
+
+viewPreview : String -> Html Msg
+viewPreview url = div
+    [ style "width" "60px"
+    , style "height" "60px"
+    , style "background-image" ("url('" ++ (log "url" url) ++ "')")
+    , style "background-position" "center"
+    , style "background-repeat" "no-repeat"
+    , style "background-size" "contain"
+    ]
+    []
 
 viewItem : Item -> Html Msg
 viewItem item =
     li []
         [ text item.text
+        , viewPreview item.pic
+        , input [
+            type_ "file"
+          , on "change" (D.map (FromUi << (GotImages item.id)) filesDecoder)
+          ] []
         , text " - "
         , button [ onClick (FromUi <| Done item.id) ] [ text "done" ]
         ]
